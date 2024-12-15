@@ -41,7 +41,14 @@ def _generate_j(mmax: int, nmax: int) -> np.ndarray:
 def read_sph(fn: str) -> dict:
     """Reads in spherical mode data in TIRCA .sph format.
 
-     Reads spherical mode Q coefficients (See GRASP documentation).
+    Notes:
+        The sph format uses Hansen's notation [1] as Q_smn, where s=1 is a TE mode and s = 2 a TM mode.
+        m and n are spherical mode indexes.
+
+        The format uses 'compressed mode index' scheme where j = 2(n(n + 1) + m − 1) + s
+
+    References:
+        [1] Hansen, J. E. (1988). Spherical near‐field antenna measurements. In Peter Peregrinus. Reprinted 2008
 
     Args:
         fn (str): File name of the .sph file
