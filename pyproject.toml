@@ -4,13 +4,63 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "matplotlib>=3.10.0",
-    "numpy>=2.2.0",
-    "pyshtools>=4.13.1",
-    "scipy>=1.14.1",
-]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.coverage.run]
+omit = ["tests", "*/site-packages/*"]
+
+
+[tool.ruff.lint]
+# Setup linting
+# E: pycodestyle
+# F: Pyflakes
+# I: isort
+# B: flake8-bugbear
+# D: pydocstyle
+select = ["E", "F", "I", "B"]
+extend-select = ["D"]
+ignore = ["E221", "E501", "E741", "D102"]
+# E501 - line too long
+# E221 - lining up equals signs
+# E741 - ambiguous variable names (using l,m,n)
+# D102 - missing docstring in public method; ignore due to docstring inheriting approach
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# Run with: ruff format --respect-gitignore --preview --line-length=112
+[tool.ruff.format]
+quote-style = "single"
+docstring-code-line-length = 112
+
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+ant_sph_tools = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+
+[tool.pixi.dependencies]
+numpy = ">=2.2.0,<3"
+matplotlib = ">=3.9.4,<4"
+scipy = ">=1.14.1,<2"
+pyshtools = ">=4.13.1,<5"
+
+[tool.pixi.feature.test.dependencies]
+pytest = "*"
+coverage = "*"
+ruff = "*"
+
+[tool.pixi.feature.test.tasks]
+test = "pytest"
+cov = "coverage run -m pytest; coverage report"
+lint = "ruff check --fix src/ tests/; ruff format src/ tests/"
+
+[tool.pixi.environments]
+test = { features = ["test"], solve-group = "default" }

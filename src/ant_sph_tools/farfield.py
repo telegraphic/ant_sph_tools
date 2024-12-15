@@ -1,7 +1,10 @@
+"""farfield.py -- Convert sph file to farfield E_theta E_phi."""
+
+import warnings
+
 import numpy as np
 import pyshtools as pysh
 from scipy.special import factorial
-import warnings
 
 
 def legendre(deg: int, x: np.ndarray) -> np.ndarray:
@@ -19,31 +22,30 @@ def legendre(deg: int, x: np.ndarray) -> np.ndarray:
         x (np.ndarray): Elements to evaluate
     """
     return (
-        np.asarray([
-            pysh.legendre.legendre_lm(deg, i, x, "4pi") for i in range(deg + 1)
-        ])
+        np.asarray(
+            [pysh.legendre.legendre_lm(deg, i, x, '4pi') for i in range(deg + 1)]
+        )
         / 2
     )
 
 
 def sph_to_farfield(Q, mmax, nmax, theta, phi):
-    """
-    This function computes the far fields E_theta and E_phi from the spherical modal coefficients Q,
-    stored in single index format, suppressing the e{-jkr}/r term as is usual in FEKO.
+    """This function computes the far fields E_theta and E_phi from spherical modal coefficients Q.
 
-    Parameters:
-    Q (numpy array): Spherical modal coefficients
-    mmax (int): Maximum azimuthal (phi) mode number
-    nmax (int): Maximum elevation (theta) mode number
-    theta (numpy array): 1D array of theta values in radians
-    phi (numpy array): 1D array of phi values in radians
+    Coefficients stored in single index format, suppressing the e{-jkr}/r term as is usual in FEKO.
+
+    Args:
+        Q (numpy array): Spherical modal coefficients
+        mmax (int): Maximum azimuthal (phi) mode number
+        nmax (int): Maximum elevation (theta) mode number
+        theta (numpy array): 1D array of theta values in radians
+        phi (numpy array): 1D array of phi values in radians
 
     Returns:
-    E_th (numpy array): Far field in theta direction
-    E_ph (numpy array): Far field in phi direction
-    mode_counter (int): Mode counter
+        E_th (numpy array): Far field in theta direction
+        E_ph (numpy array): Far field in phi direction
+        mode_counter (int): Mode counter
     """
-
     eta0 = 376.730313668  # post-2019 definition
 
     # Scale Q to align with FEKO usage
@@ -63,7 +65,7 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
         NP = legendre(n, np.cos(theta))
 
         # Add an extra row of zeros for the m+1 mode
-        NP = np.pad(NP, ((0, 1), (0, 0)), mode="constant")
+        NP = np.pad(NP, ((0, 1), (0, 0)), mode='constant')
 
         for m in range(-n, n + 1):
             m_indx = -m  # The m-mode swaps due to the GRASP time convention
@@ -76,7 +78,7 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
 
             # Precompute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+                warnings.simplefilter('ignore')
                 NPdsm = NP[abs(m), :] / np.sin(theta) * m
                 NPdsabsm = NP[abs(m), :] / np.sin(theta) * abs(m)
 
