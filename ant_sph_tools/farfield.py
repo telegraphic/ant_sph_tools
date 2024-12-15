@@ -1,18 +1,23 @@
 import numpy as np  
 import pyshtools as pysh
 from scipy.special import lpmv, factorial  
-
-
+import warnings
+    
 def legendre(deg: int, x: np.ndarray) -> np.ndarray:
     """Computes Legendre functions of degree n.
-    Equivalent to MATLAB legendre().
+
+    Notes:
+        Equivalent to MATLAB legendre() with 'norm' normalization. 
+        We use the shtools '4pi' normalization, which comes out 2x
+        larger than the MATLAB 'norm' scheme. 
+        The scipy.special.lpmv() function returns un-normalized values,
+        hence using the pyshtools package.
 
     Args:
         deg (int): Degree of Legendre functions
         x (np.ndarray): Elements to evaluate 
     """
-    return np.asarray([pysh.legendre.legendre_lm(deg, i, x, '4pi') for i in range(deg+1)])
-    #return np.asarray([lpmv(i,deg,x) for i in range(deg+1)])
+    return np.asarray([pysh.legendre.legendre_lm(deg, i, x, '4pi') for i in range(deg+1)]) / 2
 
 
 def sph_to_farfield(Q, mmax, nmax, theta, phi):  
@@ -42,7 +47,7 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
    # Preallocate storage for speed  
 
    num_modes = 2 * (nmax * (nmax + 1) + mmax - 1) + 2
-   print(f"{nmax} {mmax} {num_modes}")
+   #print(f"{nmax} {mmax} {num_modes}")
    E_th_mode = np.zeros((len(phi), len(theta), num_modes+1), dtype=np.complex128)  
    E_ph_mode = np.zeros((len(phi), len(theta), num_modes+1), dtype=np.complex128)  
   
@@ -63,11 +68,13 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
           
         CmnConstant = np.sqrt((n + abs(m) + 1) * (n - abs(m)))  
           
-        # Precompute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases  
-        NPdsm = NP[abs(m), :] / np.sin(theta) * m  
-        NPdsabsm = NP[abs(m), :] / np.sin(theta) * abs(m)  
+        # Precompute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases 
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            NPdsm = NP[abs(m), :] / np.sin(theta) * m  
+            NPdsabsm = NP[abs(m), :] / np.sin(theta) * abs(m)  
           
-        indx0 = np.where(theta == 0)[0]  
+        indx0 = np.where(np.isclose(theta, 0))[0]  
         if len(indx0) > 0:  # special case for theta=0  
            if abs(m) != 1:  
               NPdsm[indx0] = 0  
@@ -77,7 +84,7 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
               NPdsm[indx0] = Cmn * np.sign(m) * n * (n + 1) / 2  
               NPdsabsm[indx0] = Cmn * n * (n + 1) / 2  
           
-        indx1 = np.where(theta == np.pi)[0]  
+        indx1 = np.where(np.isclose(theta, np.pi))[0]  
         if len(indx1) > 0:  # special case for theta=180 deg  
            if abs(m) != 1:  
               NPdsm[indx1] = 0  
@@ -115,10 +122,11 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
    E_th = np.sum(E_th_mode, axis=2)  
    E_ph = np.sum(E_ph_mode, axis=2)  
     
-   # Apply scaling needed by FEKO  
-   sqrt_fac = np.sqrt(eta0 / (2 * np.pi))  
+   # Apply scaling needed by FEKO
+   # Also apply 1/2 factor due to sphtools '4pi' vs. MATLAB 'norm' normalization
+   sqrt_fac = np.sqrt(eta0 / (2 * np.pi))
    E_th = sqrt_fac * E_th  
-   E_ph = sqrt_fac * E_ph  
+   E_ph = sqrt_fac * E_ph
     
    return E_th, E_ph, mode_counter
     
