@@ -52,15 +52,15 @@ matplotlib = ">=3.9.4,<4"
 scipy = ">=1.14.1,<2"
 pyshtools = ">=4.13.1,<5"
 
-[tool.pixi.feature.test.dependencies]
-pytest = "*"
-coverage = "*"
-ruff = "*"
-
 [tool.pixi.feature.test.tasks]
 test = "pytest"
 cov = "coverage run -m pytest; coverage report"
 lint = "ruff check --fix src/ tests/; ruff format src/ tests/"
+
+[tool.pixi.feature.test.dependencies]
+pytest = ">=8.3.4,<9"
+coverage = ">=7.6.9,<8"
+ruff = ">=0.8.3,<0.9"
 
 [tool.pixi.environments]
 test = { features = ["test"], solve-group = "default" }
