@@ -11,10 +11,10 @@ def test_read_sph():
 
     Compares against stored MATLAB output.
     """
-    sph_data = read_sph('sph/dipole_FarField1_299MHz.sph')
+    sph_data = read_sph('tests/sph/dipole_FarField1_299MHz.sph')
 
     # Load MATLAB workspace
-    mat_data = loadmat('tests/test_ReadSphModes.mat')
+    mat_data = loadmat('tests/matlab/test_ReadSphModes.mat')
 
     assert np.allclose(sph_data['Q'], mat_data['Q'])
     assert np.allclose(sph_data['j'], mat_data['j'])
