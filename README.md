@@ -40,6 +40,10 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
     """
 ```
 
+### Requirements
+
+The code requires numpy, scipy and the [pyshtools](https://shtools.github.io/SHTOOLS/) package.  
+
 ### Tests
 
 The code output has been checked for equivalence against its MATLAB counterpart; test data exported from MATLAB is provided in the `tests` directory.
