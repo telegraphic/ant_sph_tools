@@ -5,3 +5,5 @@ __pycache__
 .pixi
 *.egg-info
 matlab/*.pdf
+.vscode
+.coverage
