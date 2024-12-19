@@ -39,7 +39,7 @@ docstring-code-line-length = 112
 
 [tool.pixi.project]
 channels = ["conda-forge"]
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]
 
 [tool.pixi.pypi-dependencies]
 ant_sph_tools = { path = ".", editable = true }
