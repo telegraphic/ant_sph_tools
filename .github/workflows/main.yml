@@ -16,4 +16,5 @@ jobs:
           cache: true
           auth-host: prefix.dev
           auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
+          manifest-path: pyproject.toml
       -  run: pixi run test
