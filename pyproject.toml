@@ -62,5 +62,17 @@ pytest = ">=8.3.4,<9"
 coverage = ">=7.6.9,<8"
 ruff = ">=0.8.3,<0.9"
 
+[tool.pixi.feature.jupyter.dependencies]
+jupyterlab = ">=4.3.3,<5"
+ipywidgets = ">=8.1.5,<9"
+panel = ">=1.5.4,<2"
+watchfiles = ">=1.0.3,<2"
+ipympl = ">=0.9.4,<0.10"
+
+
+[tool.pixi.feature.jupyter.tasks]
+jupyter = "jupyter-lab"
+
 [tool.pixi.environments]
 test = { features = ["test"], solve-group = "default" }
+jupyter = {features = ["jupyter"], solve-group = "default" }
