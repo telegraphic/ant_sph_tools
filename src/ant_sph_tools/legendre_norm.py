@@ -1,4 +1,5 @@
-"""legendre_norm.py - equivalent to MATLAB legendre() function with 'norm' normalization """
+"""legendre_norm.py - equivalent to MATLAB legendre() function with 'norm' normalization."""
+
 import numpy as np
 import pyshtools as pysh
 
