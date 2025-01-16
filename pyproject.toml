@@ -47,10 +47,11 @@ ant_sph_tools = { path = ".", editable = true }
 [tool.pixi.tasks]
 
 [tool.pixi.dependencies]
-numpy = ">=2.2.0,<3"
+numpy = ">=1.19,<2"
 matplotlib = ">=3.9.4,<4"
 scipy = ">=1.14.1,<2"
 pyshtools = ">=4.13.1,<5"
+numba = ">=0.60.0,<0.61"
 
 [tool.pixi.feature.test.tasks]
 test = "pytest"

@@ -1,10 +1,10 @@
 """farfield.py -- Convert sph file to farfield E_theta E_phi."""
 
-import warnings
-
 import numpy as np
 import pyshtools as pysh
-from scipy.special import factorial
+from numba import njit
+
+from .numba_factorial import numba_factorial
 
 
 def legendre(deg: int, x: np.ndarray) -> np.ndarray:
@@ -36,41 +36,27 @@ def legendre(deg: int, x: np.ndarray) -> np.ndarray:
     return 0.5 * np.asarray(f_leg)
 
 
-def sph_to_farfield(Q, mmax, nmax, theta, phi):
-    """This function computes the far fields E_theta and E_phi from spherical modal coefficients Q.
-
-    Args:
-        Q (numpy array): Spherical modal coefficients, in compressed index format.
-        mmax (int): Maximum azimuthal (phi) mode number
-        nmax (int): Maximum elevation (theta) mode number
-        theta (numpy array): 1D array of theta values in radians
-        phi (numpy array): 1D array of phi values in radians
-
-    Returns:
-        E_th (numpy array): Far field in theta direction
-        E_ph (numpy array): Far field in phi direction
-        mode_counter (int): Mode counter
-    """
+@njit
+def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
     eta0 = 376.730313668  # post-2019 definition
 
-    # Scale Q to align with FEKO usage
-    # Also complex conjugate the coefficients to align with FEKO e^{j omega t} time convention
-    Q = np.sqrt(8 * np.pi) * np.conj(Q)
-
     # Preallocate storage for speed
-
     num_modes = 2 * (nmax * (nmax + 1) + mmax - 1) + 2
     # print(f"{nmax} {mmax} {num_modes}")
     E_th_mode = np.zeros((len(phi), len(theta), num_modes + 1), dtype=np.complex128)
     E_ph_mode = np.zeros((len(phi), len(theta), num_modes + 1), dtype=np.complex128)
 
-    mode_counter = 0
-    for n in range(1, nmax + 1):
-        # Calculate associated Legendre polynomials
-        NP = legendre(n, np.cos(theta))
+    # precompute some reused values
+    sin_theta_inv = 1 / np.sin(theta)
+    cos_theta_inv = 1 / np.cos(theta)
 
-        # Add an extra row of zeros for the m+1 mode
-        NP = np.pad(NP, ((0, 1), (0, 0)), mode='constant')
+    mode_counter = 0
+    for ii, n in enumerate(range(1, nmax + 1)):
+        NP = legendre_list[ii]
+
+        # Precompute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms,
+        NPdsm_arr = NP * sin_theta_inv
+        NPdsabsm_arr = NP * cos_theta_inv
 
         for m in range(-n, n + 1):
             m_indx = -m  # The m-mode swaps due to the GRASP time convention
@@ -81,32 +67,32 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
 
             CmnConstant = np.sqrt((n + abs(m) + 1) * (n - abs(m)))
 
-            # Precompute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                NPdsm = NP[abs(m), :] / np.sin(theta) * m
-                NPdsabsm = NP[abs(m), :] / np.sin(theta) * abs(m)
+            # Compute all m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
+            NPdsm = NPdsm_arr[abs(m), :] * m
+            NPdsabsm = NPdsabsm_arr[abs(m), :] * abs(m)
 
+            # special case for theta=0
             indx0 = np.where(np.isclose(theta, 0))[0]
-            if len(indx0) > 0:  # special case for theta=0
+            if len(indx0) > 0:
                 if abs(m) != 1:
                     NPdsm[indx0] = 0
                     NPdsabsm[indx0] = 0
                 else:
                     Cmn = np.sqrt(
-                        (2 * n + 1) / 2 * factorial(n - abs(m)) / factorial(n + abs(m))
+                        (2 * n + 1) / 2 * numba_factorial(n - abs(m)) / numba_factorial(n + abs(m))
                     )
                     NPdsm[indx0] = Cmn * np.sign(m) * n * (n + 1) / 2
                     NPdsabsm[indx0] = Cmn * n * (n + 1) / 2
 
+            # special case for theta=180 deg
             indx1 = np.where(np.isclose(theta, np.pi))[0]
-            if len(indx1) > 0:  # special case for theta=180 deg
+            if len(indx1) > 0:
                 if abs(m) != 1:
                     NPdsm[indx1] = 0
                     NPdsabsm[indx1] = 0
                 else:
                     Cmn = np.sqrt(
-                        (2 * n + 1) / 2 * factorial(n - abs(m)) / factorial(n + abs(m))
+                        (2 * n + 1) / 2 * numba_factorial(n - abs(m)) / numba_factorial(n + abs(m))
                     )
                     NPdsm[indx1] = (-1) ** (n + 1) * Cmn * np.sign(m) * n * (n + 1) / 2
                     NPdsabsm[indx1] = (-1) ** (n + 1) * Cmn * n * (n + 1) / 2
@@ -150,5 +136,41 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
     sqrt_fac = np.sqrt(eta0 / (2 * np.pi))
     E_th = sqrt_fac * E_th
     E_ph = sqrt_fac * E_ph
+
+    return E_th, E_ph, mode_counter
+
+
+def sph_to_farfield(Q, mmax, nmax, theta, phi):
+    """This function computes the far fields E_theta and E_phi from spherical modal coefficients Q.
+
+    Args:
+        Q (numpy array): Spherical modal coefficients, in compressed index format.
+        mmax (int): Maximum azimuthal (phi) mode number
+        nmax (int): Maximum elevation (theta) mode number
+        theta (numpy array): 1D array of theta values in radians
+        phi (numpy array): 1D array of phi values in radians
+
+    Returns:
+        E_th (numpy array): Far field in theta direction
+        E_ph (numpy array): Far field in phi direction
+        mode_counter (int): Mode counter
+    """
+    # Scale Q to align with FEKO usage
+    # Also complex conjugate the coefficients to align with FEKO e^{j omega t} time convention
+    Q = np.sqrt(8 * np.pi) * np.conj(Q)
+
+    #print("Precomputing legendre polynomials")
+    legendre_list = []
+    for n in range(1, nmax + 1):
+        # Calculate associated Legendre polynomials
+        NP = legendre(n, np.cos(theta))
+
+        # Add an extra row of zeros for the m+1 mode
+        NP = np.pad(NP, ((0, 1), (0, 0)), mode='constant')
+        legendre_list.append(NP)
+
+    # Call numba jit-ified
+    #print("Calling _sph_to_farfield kernel")
+    E_th, E_ph, mode_counter = _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list)
 
     return E_th, E_ph, mode_counter
