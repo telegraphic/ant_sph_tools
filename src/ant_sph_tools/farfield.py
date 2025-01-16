@@ -83,7 +83,7 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
             # TE modes
             j = 2 * ((n + 1) * n + m_indx - 1)
             # print(f"TE j s n m {j} {s} {n} {m_indx}")
-            phi_const = (np.exp(1j * m * phi) * Sign / np.sqrt(n * (n + 1))).T
+            phi_const = (np.exp(1j * m * phi) * Sign / np.sqrt(n * (n + 1)))
             phi_const = phi_const[:, np.newaxis]
 
             E_th_mode[:, :, j] = -(1j**n) * NPdsm * Q[j] * phi_const
@@ -99,7 +99,7 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
                 NPdsabsm * Q[j] * cos_theta
                 - CmnConstant * Q[j] * NP[abs(m) + 1, :]
             ) * phi_const
-            E_ph_mode[:, :, j] = 1j ** (n + 1) * NPdsm[:] * Q[j] * phi_const
+            E_ph_mode[:, :, j] = 1j ** (n + 1) * NPdsm * Q[j] * phi_const
 
             mode_counter += 1
 
