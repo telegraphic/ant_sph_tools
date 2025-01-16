@@ -9,6 +9,44 @@ from .legendre_norm import legendre_norm as legendre
 from .numba_factorial import numba_factorial as factorial
 
 
+#@nb.njit
+def m_mode_sign(m: int) -> int:
+    """Return sign (+/- 1) required in calcs for m-modes."""
+    if m >= 0:
+        return 1
+    else:
+        return (-1) ** m
+
+
+def fix_special_cases(n, m, theta, NPdsm, NPdsabsm):
+    """Fix calculations for special cases."""
+    indx0 = np.where(np.isclose(theta, 0))[0]
+    if len(indx0) > 0:  # special case for theta=0
+        if abs(m) != 1:
+            NPdsm[indx0] = 0
+            NPdsabsm[indx0] = 0
+        else:
+            Cmn = np.sqrt(
+                (2 * n + 1) / 2 * factorial(n - abs(m)) / factorial(n + abs(m))
+            )
+            NPdsm[indx0] = Cmn * np.sign(m) * n * (n + 1) / 2
+            NPdsabsm[indx0] = Cmn * n * (n + 1) / 2
+
+    indx1 = np.where(np.isclose(theta, np.pi))[0]
+    if len(indx1) > 0:  # special case for theta=180 deg
+        if abs(m) != 1:
+            NPdsm[indx1] = 0
+            NPdsabsm[indx1] = 0
+        else:
+            Cmn = np.sqrt(
+                (2 * n + 1) / 2 * factorial(n - abs(m)) / factorial(n + abs(m))
+            )
+            NPdsm[indx1] = (-1) ** (n + 1) * Cmn * np.sign(m) * n * (n + 1) / 2
+            NPdsabsm[indx1] = (-1) ** (n + 1) * Cmn * n * (n + 1) / 2
+
+    return NPdsm, NPdsabsm
+
+#@nb.njit
 def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
     """sph_to_farfield compute kernel. Called by sph_to_farfield()."""
     eta0 = 376.730313668  # post-2019 definition
@@ -28,46 +66,25 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
     cos_theta = np.cos(theta)
 
     mode_counter = 0
+
     for ii, n in enumerate(range(1, nmax + 1)):
         # Load precomputed Legendre polynomials
         NP = legendre_list[ii]
 
+        # Precompute NP(x)/sin(x)
+        NP_sin_theta = NP / sin_theta
+
         for m in range(-n, n + 1):
             m_indx = -m  # The m-mode swaps due to the GRASP time convention
-            if m >= 0:
-                Sign = 1
-            else:
-                Sign = (-1) ** m
+            Sign = m_mode_sign(m)
 
             CmnConstant = np.sqrt((n + abs(m) + 1) * (n - abs(m)))
 
-            # Precompute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
-            NPdsm = NP[abs(m), :] / sin_theta * m
-            NPdsabsm = NP[abs(m), :] / sin_theta * abs(m)
+            # Compute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
+            NPdsm = NP_sin_theta[abs(m), :] * m
+            NPdsabsm = NP_sin_theta[abs(m), :] * abs(m)
 
-            indx0 = np.where(np.isclose(theta, 0))[0]
-            if len(indx0) > 0:  # special case for theta=0
-                if abs(m) != 1:
-                    NPdsm[indx0] = 0
-                    NPdsabsm[indx0] = 0
-                else:
-                    Cmn = np.sqrt(
-                        (2 * n + 1) / 2 * factorial(n - abs(m)) / factorial(n + abs(m))
-                    )
-                    NPdsm[indx0] = Cmn * np.sign(m) * n * (n + 1) / 2
-                    NPdsabsm[indx0] = Cmn * n * (n + 1) / 2
-
-            indx1 = np.where(np.isclose(theta, np.pi))[0]
-            if len(indx1) > 0:  # special case for theta=180 deg
-                if abs(m) != 1:
-                    NPdsm[indx1] = 0
-                    NPdsabsm[indx1] = 0
-                else:
-                    Cmn = np.sqrt(
-                        (2 * n + 1) / 2 * factorial(n - abs(m)) / factorial(n + abs(m))
-                    )
-                    NPdsm[indx1] = (-1) ** (n + 1) * Cmn * np.sign(m) * n * (n + 1) / 2
-                    NPdsabsm[indx1] = (-1) ** (n + 1) * Cmn * n * (n + 1) / 2
+            NPdsm, NPdsabsm = fix_special_cases(n, m, theta, NPdsm, NPdsabsm)
 
             # TE modes
             s = 1
@@ -109,6 +126,23 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
 
     return E_th, E_ph, mode_counter
 
+
+def _calculate_legendre(nmax: int, theta: np.ndarray) -> list:
+    """Compute required legendre polynomials."""
+    legendre_list = []
+    cos_theta = np.cos(theta)
+
+    for n in range(1, nmax + 1):
+        # Calculate associated Legendre polynomials
+        NP = legendre(n, cos_theta)
+
+        # Add an extra row of zeros for the m+1 mode
+        NP = np.pad(NP, ((0, 1), (0, 0)), mode='constant')
+        legendre_list.append(NP)
+    legendre_list = nb.typed.List(legendre_list)
+    return legendre_list
+
+
 def sph_to_farfield(Q, mmax, nmax, theta, phi):
     """This function computes the far fields E_theta and E_phi from spherical modal coefficients Q.
 
@@ -125,19 +159,12 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
         mode_counter (int): Mode counter
     """
     # Precompute legendre polynomials
-    legendre_list = []
-    for n in range(1, nmax + 1):
-        # Calculate associated Legendre polynomials
-        NP = legendre(n, np.cos(theta))
-
-        # Add an extra row of zeros for the m+1 mode
-        NP = np.pad(NP, ((0, 1), (0, 0)), mode='constant')
-        legendre_list.append(NP)
-    legendre_list = nb.typed.List(legendre_list)
+    legendre_list = _calculate_legendre(nmax, theta)
 
     # Call the main numba kernel
     with warnings.catch_warnings():
         # Suppress divide by zeros warnings
         warnings.simplefilter('ignore')
         E_th, E_ph, mode_counter = _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list)
+
     return E_th, E_ph, mode_counter
