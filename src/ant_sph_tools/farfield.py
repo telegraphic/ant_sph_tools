@@ -74,30 +74,29 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
             s = 1
             j = 2 * ((n + 1) * n + m_indx - 1) + s
             # print(f"TE j s n m {j} {s} {n} {m_indx}")
-            for tt in range(len(theta)):
-                phi_const = (np.exp(1j * m * phi) * Sign / np.sqrt(n * (n + 1))).T
-                E_th_mode[:, tt, j - 1] = -(1j**n) * NPdsm[tt] * Q[j - 1]
-                E_th_mode[:, tt, j - 1] = phi_const * E_th_mode[:, tt, j - 1]
-                E_ph_mode[:, tt, j - 1] = -(1j ** (n + 1)) * (
-                    NPdsabsm[tt] * Q[j - 1] * cos_theta[tt]
-                    - CmnConstant * Q[j - 1] * NP[abs(m) + 1, tt]
-                )
-                E_ph_mode[:, tt, j - 1] = phi_const * E_ph_mode[:, tt, j - 1]
+
+            phi_const = (np.exp(1j * m * phi) * Sign / np.sqrt(n * (n + 1))).T
+            E_th_mode[:, :, j - 1] = -(1j**n) * NPdsm[:] * Q[j - 1]
+            E_th_mode[:, :, j - 1] = phi_const[:, np.newaxis] * E_th_mode[:, :, j - 1]
+            E_ph_mode[:, :, j - 1] = -(1j ** (n + 1)) * (
+                NPdsabsm[:] * Q[j - 1] * cos_theta[:]
+                - CmnConstant * Q[j - 1] * NP[abs(m) + 1, :]
+            )
+            E_ph_mode[:, :, j - 1] = phi_const[:, np.newaxis] * E_ph_mode[:, :, j - 1]
             mode_counter += 1
 
             # TM modes
             s = 2
             j = 2 * ((n + 1) * n + m_indx - 1) + s
             # print(f"TM j s n m {j} {s} {n} {m_indx}")
-            for tt in range(len(theta)):
-                phi_const = (np.exp(1j * m * phi) * Sign / np.sqrt(n * (n + 1))).T
-                E_th_mode[:, tt, j - 1] = 1j**n * (
-                    NPdsabsm[tt] * Q[j - 1] * cos_theta[tt]
-                    - CmnConstant * Q[j - 1] * NP[abs(m) + 1, tt]
-                )
-                E_th_mode[:, tt, j - 1] = phi_const * E_th_mode[:, tt, j - 1]
-                E_ph_mode[:, tt, j - 1] = 1j ** (n + 1) * NPdsm[tt] * Q[j - 1]
-                E_ph_mode[:, tt, j - 1] = phi_const * E_ph_mode[:, tt, j - 1]
+            phi_const = (np.exp(1j * m * phi) * Sign / np.sqrt(n * (n + 1))).T
+            E_th_mode[:, :, j - 1] = 1j**n * (
+                NPdsabsm[:] * Q[j - 1] * cos_theta[:]
+                - CmnConstant * Q[j - 1] * NP[abs(m) + 1, :]
+            )
+            E_th_mode[:, :, j - 1] = phi_const[:, np.newaxis] * E_th_mode[:, :, j - 1]
+            E_ph_mode[:, :, j - 1] = 1j ** (n + 1) * NPdsm[:] * Q[j - 1]
+            E_ph_mode[:, :, j - 1] = phi_const[:, np.newaxis] * E_ph_mode[:, :, j - 1]
             mode_counter += 1
 
     # Now sum over all modes
