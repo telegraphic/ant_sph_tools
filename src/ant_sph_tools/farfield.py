@@ -2,14 +2,12 @@
 
 import warnings
 
-import numba as nb
 import numpy as np
 
 from .legendre_norm import legendre_norm as legendre
 from .numba_factorial import numba_factorial as factorial
 
 
-#@nb.njit
 def m_mode_sign(m: int) -> int:
     """Return sign (+/- 1) required in calcs for m-modes."""
     if m >= 0:
@@ -46,11 +44,9 @@ def fix_special_cases(n, m, theta, NPdsm, NPdsabsm):
 
     return NPdsm, NPdsabsm
 
-#@nb.njit
+
 def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
     """sph_to_farfield compute kernel. Called by sph_to_farfield()."""
-    eta0 = 376.730313668  # post-2019 definition
-
     # Scale Q to align with FEKO usage
     # Also complex conjugate the coefficients to align with FEKO e^{j omega t} time convention
     Q = np.sqrt(8 * np.pi) * np.conj(Q)
@@ -66,7 +62,6 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
     cos_theta = np.cos(theta)
 
     mode_counter = 0
-
     for ii, n in enumerate(range(1, nmax + 1)):
         # Load precomputed Legendre polynomials
         NP = legendre_list[ii]
@@ -83,46 +78,39 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
             # Compute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
             NPdsm = NP_sin_theta[abs(m), :] * m
             NPdsabsm = NP_sin_theta[abs(m), :] * abs(m)
-
             NPdsm, NPdsabsm = fix_special_cases(n, m, theta, NPdsm, NPdsabsm)
 
             # TE modes
-            s = 1
-            j = 2 * ((n + 1) * n + m_indx - 1) + s
+            j = 2 * ((n + 1) * n + m_indx - 1)
             # print(f"TE j s n m {j} {s} {n} {m_indx}")
             phi_const = (np.exp(1j * m * phi) * Sign / np.sqrt(n * (n + 1))).T
             phi_const = phi_const[:, np.newaxis]
 
-            E_th_mode[:, :, j - 1] = -(1j**n) * NPdsm[:] * Q[j - 1]
-            E_th_mode[:, :, j - 1] = phi_const * E_th_mode[:, :, j - 1]
-            E_ph_mode[:, :, j - 1] = -(1j ** (n + 1)) * (
-                NPdsabsm * Q[j - 1] * cos_theta
-                - CmnConstant * Q[j - 1] * NP[abs(m) + 1, :]
-            )
-            E_ph_mode[:, :, j - 1] = phi_const * E_ph_mode[:, :, j - 1]
+            E_th_mode[:, :, j] = -(1j**n) * NPdsm * Q[j] * phi_const
+            E_ph_mode[:, :, j] = -(1j ** (n + 1)) * (
+                NPdsabsm * Q[j] * cos_theta
+                - CmnConstant * Q[j] * NP[abs(m) + 1, :]
+            ) * phi_const
             mode_counter += 1
 
             # TM modes
-            s = 2
-            j = 2 * ((n + 1) * n + m_indx - 1) + s
-            E_th_mode[:, :, j - 1] = 1j**n * (
-                NPdsabsm * Q[j - 1] * cos_theta
-                - CmnConstant * Q[j - 1] * NP[abs(m) + 1, :]
-            )
-            E_th_mode[:, :, j - 1] = phi_const * E_th_mode[:, :, j - 1]
-            E_ph_mode[:, :, j - 1] = 1j ** (n + 1) * NPdsm[:] * Q[j - 1]
-            E_ph_mode[:, :, j - 1] = phi_const * E_ph_mode[:, :, j - 1]
+            j += 1
+            E_th_mode[:, :, j] = 1j**n * (
+                NPdsabsm * Q[j] * cos_theta
+                - CmnConstant * Q[j] * NP[abs(m) + 1, :]
+            ) * phi_const
+            E_ph_mode[:, :, j] = 1j ** (n + 1) * NPdsm[:] * Q[j] * phi_const
+
             mode_counter += 1
 
-    # Now sum over all modes
-    E_th = np.sum(E_th_mode, axis=2)
-    E_ph = np.sum(E_ph_mode, axis=2)
-
-    # Apply scaling needed by FEKO
+    # Scaling needed by FEKO
     # Also apply 1/2 factor due to sphtools '4pi' vs. MATLAB 'norm' normalization
+    eta0 = 376.730313668  # post-2019 definition
     sqrt_fac = np.sqrt(eta0 / (2 * np.pi))
-    E_th = sqrt_fac * E_th
-    E_ph = sqrt_fac * E_ph
+
+    # Now sum over all modes
+    E_th = sqrt_fac * np.sum(E_th_mode, axis=2)
+    E_ph = sqrt_fac * np.sum(E_ph_mode, axis=2)
 
     return E_th, E_ph, mode_counter
 
@@ -131,6 +119,7 @@ def _calculate_legendre(nmax: int, theta: np.ndarray) -> list:
     """Compute required legendre polynomials."""
     legendre_list = []
     cos_theta = np.cos(theta)
+    sin_theta = np.sin(theta)
 
     for n in range(1, nmax + 1):
         # Calculate associated Legendre polynomials
@@ -139,7 +128,9 @@ def _calculate_legendre(nmax: int, theta: np.ndarray) -> list:
         # Add an extra row of zeros for the m+1 mode
         NP = np.pad(NP, ((0, 1), (0, 0)), mode='constant')
         legendre_list.append(NP)
-    legendre_list = nb.typed.List(legendre_list)
+
+    # Uncomment if using numba
+    #legendre_list = nb.typed.List(legendre_list)
     return legendre_list
 
 
