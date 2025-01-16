@@ -19,4 +19,5 @@ Tasks:
 pixi run test       # run tests
 pixi run cov        # run code coverage
 pixi run lint       # run ruff linter
+pixi run jupyter    # run jupyterlab
 ```

@@ -4,7 +4,6 @@ import warnings
 
 import numba as nb
 import numpy as np
-import pyshtools as pysh
 
 from .legendre_norm import legendre_norm as legendre
 from .numba_factorial import numba_factorial as factorial
@@ -25,6 +24,10 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
     E_th_mode = np.zeros((len(phi), len(theta), num_modes + 1), dtype=np.complex128)
     E_ph_mode = np.zeros((len(phi), len(theta), num_modes + 1), dtype=np.complex128)
 
+    # precompute reused values
+    sin_theta = np.sin(theta)
+    cos_theta = np.cos(theta)
+
     mode_counter = 0
     for ii, n in enumerate(range(1, nmax + 1)):
         # Load precomputed Legendre polynomials
@@ -40,8 +43,8 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
             CmnConstant = np.sqrt((n + abs(m) + 1) * (n - abs(m)))
 
             # Precompute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
-            NPdsm = NP[abs(m), :] / np.sin(theta) * m
-            NPdsabsm = NP[abs(m), :] / np.sin(theta) * abs(m)
+            NPdsm = NP[abs(m), :] / sin_theta * m
+            NPdsabsm = NP[abs(m), :] / sin_theta * abs(m)
 
             indx0 = np.where(np.isclose(theta, 0))[0]
             if len(indx0) > 0:  # special case for theta=0
@@ -76,7 +79,7 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
                 E_th_mode[:, tt, j - 1] = -(1j**n) * NPdsm[tt] * Q[j - 1]
                 E_th_mode[:, tt, j - 1] = phi_const * E_th_mode[:, tt, j - 1]
                 E_ph_mode[:, tt, j - 1] = -(1j ** (n + 1)) * (
-                    NPdsabsm[tt] * Q[j - 1] * np.cos(theta[tt])
+                    NPdsabsm[tt] * Q[j - 1] * cos_theta[tt]
                     - CmnConstant * Q[j - 1] * NP[abs(m) + 1, tt]
                 )
                 E_ph_mode[:, tt, j - 1] = phi_const * E_ph_mode[:, tt, j - 1]
@@ -89,7 +92,7 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
             for tt in range(len(theta)):
                 phi_const = (np.exp(1j * m * phi) * Sign / np.sqrt(n * (n + 1))).T
                 E_th_mode[:, tt, j - 1] = 1j**n * (
-                    NPdsabsm[tt] * Q[j - 1] * np.cos(theta[tt])
+                    NPdsabsm[tt] * Q[j - 1] * cos_theta[tt]
                     - CmnConstant * Q[j - 1] * NP[abs(m) + 1, tt]
                 )
                 E_th_mode[:, tt, j - 1] = phi_const * E_th_mode[:, tt, j - 1]
