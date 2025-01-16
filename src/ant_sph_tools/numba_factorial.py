@@ -4,7 +4,7 @@ from numba import njit
 from scipy.special import factorial
 
 # Create a lookup table by calling scipy
-FACTORIAL_LUT = factorial(np.arange(0, 150))
+FACTORIAL_LUT = factorial(np.arange(0, 150, dtype='float64'))
 
 @njit
 def numba_factorial(n: int) -> float:

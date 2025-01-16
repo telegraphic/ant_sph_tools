@@ -1,44 +1,23 @@
 """farfield.py -- Convert sph file to farfield E_theta E_phi."""
 
+import warnings
+
+import numba as nb
 import numpy as np
 import pyshtools as pysh
-from numba import njit
 
-from .numba_factorial import numba_factorial
-
-
-def legendre(deg: int, x: np.ndarray) -> np.ndarray:
-    """Computes Legendre functions of degree n.
-
-    Notes:
-        Equivalent to MATLAB legendre() with 'norm' normalization.
-        We use the SHTOOLS '4pi' normalization, which comes out 2x
-        larger than the MATLAB 'norm' scheme.
-
-        See https://shtools.github.io/SHTOOLS/complex-spherical-harmonics.html#4pi-normalized
-        and https://au.mathworks.com/help/matlab/ref/legendre.html#f89-1002493
-
-        SHTOOLS (and most of astro) uses (l, m) for degree and order, respectively.
-        MATLAB (and engineering?) uses (n, m) for degree and order, respectively.
-
-        The scipy.special.lpmv() function returns un-normalized values,
-        hence using the pyshtools package.
-
-    Args:
-        deg (int): Degree of Legendre functions
-        x (np.ndarray): Elements to evaluate
-
-    Returns:
-        f_leg = the associated Legendre functions of degree n and order m
-    """
-    f_leg = [pysh.legendre.legendre_lm(deg, i, x, '4pi') for i in range(deg + 1)]
-    # Factor of 1/2 to convert 4pi normalization to MATLAB
-    return 0.5 * np.asarray(f_leg)
+from .legendre_norm import legendre_norm as legendre
+from .numba_factorial import numba_factorial as factorial
 
 
-@njit
+@nb.njit
 def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
+    """sph_to_farfield compute kernel. Called by sph_to_farfield()."""
     eta0 = 376.730313668  # post-2019 definition
+
+    # Scale Q to align with FEKO usage
+    # Also complex conjugate the coefficients to align with FEKO e^{j omega t} time convention
+    Q = np.sqrt(8 * np.pi) * np.conj(Q)
 
     # Preallocate storage for speed
     num_modes = 2 * (nmax * (nmax + 1) + mmax - 1) + 2
@@ -46,17 +25,10 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
     E_th_mode = np.zeros((len(phi), len(theta), num_modes + 1), dtype=np.complex128)
     E_ph_mode = np.zeros((len(phi), len(theta), num_modes + 1), dtype=np.complex128)
 
-    # precompute some reused values
-    sin_theta_inv = 1 / np.sin(theta)
-    cos_theta_inv = 1 / np.cos(theta)
-
     mode_counter = 0
     for ii, n in enumerate(range(1, nmax + 1)):
+        # Load precomputed Legendre polynomials
         NP = legendre_list[ii]
-
-        # Precompute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms,
-        NPdsm_arr = NP * sin_theta_inv
-        NPdsabsm_arr = NP * cos_theta_inv
 
         for m in range(-n, n + 1):
             m_indx = -m  # The m-mode swaps due to the GRASP time convention
@@ -67,32 +39,30 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
 
             CmnConstant = np.sqrt((n + abs(m) + 1) * (n - abs(m)))
 
-            # Compute all m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
-            NPdsm = NPdsm_arr[abs(m), :] * m
-            NPdsabsm = NPdsabsm_arr[abs(m), :] * abs(m)
+            # Precompute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
+            NPdsm = NP[abs(m), :] / np.sin(theta) * m
+            NPdsabsm = NP[abs(m), :] / np.sin(theta) * abs(m)
 
-            # special case for theta=0
             indx0 = np.where(np.isclose(theta, 0))[0]
-            if len(indx0) > 0:
+            if len(indx0) > 0:  # special case for theta=0
                 if abs(m) != 1:
                     NPdsm[indx0] = 0
                     NPdsabsm[indx0] = 0
                 else:
                     Cmn = np.sqrt(
-                        (2 * n + 1) / 2 * numba_factorial(n - abs(m)) / numba_factorial(n + abs(m))
+                        (2 * n + 1) / 2 * factorial(n - abs(m)) / factorial(n + abs(m))
                     )
                     NPdsm[indx0] = Cmn * np.sign(m) * n * (n + 1) / 2
                     NPdsabsm[indx0] = Cmn * n * (n + 1) / 2
 
-            # special case for theta=180 deg
             indx1 = np.where(np.isclose(theta, np.pi))[0]
-            if len(indx1) > 0:
+            if len(indx1) > 0:  # special case for theta=180 deg
                 if abs(m) != 1:
                     NPdsm[indx1] = 0
                     NPdsabsm[indx1] = 0
                 else:
                     Cmn = np.sqrt(
-                        (2 * n + 1) / 2 * numba_factorial(n - abs(m)) / numba_factorial(n + abs(m))
+                        (2 * n + 1) / 2 * factorial(n - abs(m)) / factorial(n + abs(m))
                     )
                     NPdsm[indx1] = (-1) ** (n + 1) * Cmn * np.sign(m) * n * (n + 1) / 2
                     NPdsabsm[indx1] = (-1) ** (n + 1) * Cmn * n * (n + 1) / 2
@@ -139,7 +109,6 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
 
     return E_th, E_ph, mode_counter
 
-
 def sph_to_farfield(Q, mmax, nmax, theta, phi):
     """This function computes the far fields E_theta and E_phi from spherical modal coefficients Q.
 
@@ -155,11 +124,7 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
         E_ph (numpy array): Far field in phi direction
         mode_counter (int): Mode counter
     """
-    # Scale Q to align with FEKO usage
-    # Also complex conjugate the coefficients to align with FEKO e^{j omega t} time convention
-    Q = np.sqrt(8 * np.pi) * np.conj(Q)
-
-    #print("Precomputing legendre polynomials")
+    # Precompute legendre polynomials
     legendre_list = []
     for n in range(1, nmax + 1):
         # Calculate associated Legendre polynomials
@@ -168,9 +133,11 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
         # Add an extra row of zeros for the m+1 mode
         NP = np.pad(NP, ((0, 1), (0, 0)), mode='constant')
         legendre_list.append(NP)
+    legendre_list = nb.typed.List(legendre_list)
 
-    # Call numba jit-ified
-    #print("Calling _sph_to_farfield kernel")
-    E_th, E_ph, mode_counter = _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list)
-
+    # Call the main numba kernel
+    with warnings.catch_warnings():
+        # Suppress divide by zeros warnings
+        warnings.simplefilter('ignore')
+        E_th, E_ph, mode_counter = _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list)
     return E_th, E_ph, mode_counter
