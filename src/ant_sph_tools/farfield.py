@@ -54,8 +54,8 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
     # Preallocate storage for speed
     num_modes = 2 * (nmax * (nmax + 1) + mmax - 1) + 2
     # print(f"{nmax} {mmax} {num_modes}")
-    E_th_mode = np.zeros((len(phi), len(theta), num_modes + 1), dtype=np.complex128)
-    E_ph_mode = np.zeros((len(phi), len(theta), num_modes + 1), dtype=np.complex128)
+    E_th_mode = np.zeros((len(phi), len(theta)), dtype=np.complex64)
+    E_ph_mode = np.zeros((len(phi), len(theta)), dtype=np.complex64)
 
     # precompute reused values
     sin_theta = np.sin(theta)
@@ -77,9 +77,6 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
         NPdsabsm_arr = NP_sin_theta[abs(m_arr), :] * abs(m_arr[:, np.newaxis])
 
         for cc, m in enumerate(range(-n, n + 1)):
-            Sign = m_mode_sign(m)
-            CmnConstant_NP = CmnConstant_NP_arr[cc]
-
             # Compute m NP(x)/sin(x) and abs(m) NP(x)/sin(x) terms, including for special cases
             NPdsm = NPdsm_arr[cc]
             NPdsabsm = NPdsabsm_arr[cc]
@@ -89,22 +86,22 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
             j = 2 * ((n + 1) * n - m - 1)
 
             # Compute sums that are reused
-            phi_const = (np.exp(1j * m * phi) * Sign / np.sqrt(n * (n + 1)))
+            phi_const = (np.exp(1j * m * phi) * m_mode_sign(m) / np.sqrt(n * (n + 1)))
             phi_const = phi_const[:, np.newaxis]
 
-            Cmn_cos_factor = NPdsabsm * cos_theta - CmnConstant_NP
-            phi_const_cmn = Cmn_cos_factor * phi_const
+            Cmn_cos_factor = NPdsabsm * cos_theta - CmnConstant_NP_arr[cc]
+            phi_const_cmn = phi_const * Cmn_cos_factor
             phi_const_NP = phi_const * NPdsm
 
             # TE modes
-            E_th_mode[:, :, j] = -(1j**n) * Q[j] * phi_const_NP
-            E_ph_mode[:, :, j] = -(1j ** (n + 1)) * Q[j] * phi_const_cmn
+            E_th_mode += -(1j**n) * Q[j] * phi_const_NP
+            E_ph_mode += -(1j ** (n + 1)) * Q[j] * phi_const_cmn
             mode_counter += 1
 
             # TM modes
             j += 1
-            E_th_mode[:, :, j] = 1j**n * Q[j] * phi_const_cmn
-            E_ph_mode[:, :, j] = 1j ** (n + 1) * Q[j] * phi_const_NP
+            E_th_mode += 1j**n * Q[j] * phi_const_cmn
+            E_ph_mode += 1j ** (n + 1) * Q[j] * phi_const_NP
             mode_counter += 1
 
     # Scaling needed by FEKO
@@ -113,8 +110,8 @@ def _sph_to_farfield(Q, mmax, nmax, theta, phi, legendre_list):
     sqrt_fac = np.sqrt(eta0 / (2 * np.pi))
 
     # Now sum over all modes
-    E_th = sqrt_fac * np.sum(E_th_mode, axis=2)
-    E_ph = sqrt_fac * np.sum(E_ph_mode, axis=2)
+    E_th = sqrt_fac * E_th_mode
+    E_ph = sqrt_fac * E_ph_mode
 
     return E_th, E_ph, mode_counter
 

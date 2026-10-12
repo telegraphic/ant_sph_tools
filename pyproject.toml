@@ -52,16 +52,20 @@ matplotlib = ">=3.9.4,<4"
 scipy = ">=1.14.1,<2"
 pyshtools = ">=4.13.1,<5"
 numba = ">=0.60.0,<0.61"
+tqdm = ">=4.67.1,<5"
+
 
 [tool.pixi.feature.test.tasks]
 test = "pytest"
 cov = "coverage run -m pytest; coverage report"
 lint = "ruff check --fix src/ tests/; ruff format src/ tests/"
+profile = "pyinstrument  -r html tests/test_aavs.py"
 
 [tool.pixi.feature.test.dependencies]
 pytest = ">=8.3.4,<9"
 coverage = ">=7.6.9,<8"
 ruff = ">=0.8.3,<0.9"
+pyinstrument = ">=5.0.0,<6"
 healpy = ">=1.17,<2"
 
 [tool.pixi.feature.jupyter.dependencies]
@@ -70,6 +74,7 @@ ipywidgets = ">=8.1.5,<9"
 panel = ">=1.5.4,<2"
 watchfiles = ">=1.0.3,<2"
 ipympl = ">=0.9.4,<0.10"
+hdf5plugin = ">=5.0.0,<6"
 
 [tool.pixi.feature.jupyter.tasks]
 jupyter = "jupyter-lab"

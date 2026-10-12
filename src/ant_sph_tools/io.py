@@ -33,7 +33,7 @@ def _generate_j(mmax: int, nmax: int) -> np.ndarray:
             for m in range(-mmode, mmode + 1, 2 * mmode):
                 for s in range(1, 3):
                     j[cnt] = 2 * (n * (n + 1) + m - 1) + s
-                    j3D[cnt] = f'{s} {m} {n}'
+                    j3D[cnt] = f'{s} {n} {m}'
                     cnt += 1
     return j, j3D
 
