@@ -62,6 +62,7 @@ lint = "ruff check --fix src/ tests/; ruff format src/ tests/"
 pytest = ">=8.3.4,<9"
 coverage = ">=7.6.9,<8"
 ruff = ">=0.8.3,<0.9"
+healpy = ">=1.17,<2"
 
 [tool.pixi.feature.jupyter.dependencies]
 jupyterlab = ">=4.3.3,<5"

@@ -40,9 +40,54 @@ def sph_to_farfield(Q, mmax, nmax, theta, phi):
     """
 ```
 
+### pyshtools coefficients
+
+`ant_sph_tools.pysh` re-expresses the spherical mode data as two sets of [pyshtools](https://shtools.github.io/SHTOOLS/) coefficients. The far field is a tangential vector field, so it can be written with two scalar potentials (a Helmholtz decomposition):
+
+```
+E = grad U - r_hat x grad V
+E_theta = dU/dtheta + (1/sin theta) dV/dphi
+E_phi   = (1/sin theta) dU/dphi - dV/dtheta
+```
+
+The TM modes (s=2) give the poloidal potential `U` and the TE modes (s=1) the toroidal potential `V`:
+
+```
+u_nm = sqrt(8 pi eta0) i^n     conj(Q_{2,-m,n}) / sqrt(n(n+1))
+v_nm = sqrt(8 pi eta0) i^(n+1) conj(Q_{1,-m,n}) / sqrt(n(n+1))
+```
+
+(pyshtools complex, `'ortho'`, `csphase=1`; the scaling, conjugation and m -> -m swap follow `FFfromSph.m`.)
+
+```python
+from ant_sph_tools import read_sph_shcoeffs, shcoeffs_to_farfield, sph_to_farfield_pysh
+
+d = read_sph_shcoeffs('tests/sph/dipole_FarField1_299MHz.sph')   # {'U', 'V', 'mmax', 'nmax'}
+E_th, E_ph = shcoeffs_to_farfield(d['U'], d['V'], theta, phi)    # shape (len(phi), len(theta))
+
+# drop-in replacement for sph_to_farfield (same arguments and outputs)
+E_th, E_ph, mode_counter = sph_to_farfield_pysh(Q, mmax, nmax, theta, phi)
+```
+
+`U` and `V` are complex `pysh.SHCoeffs`; the default convention (`'ortho'`, `csphase=-1`) is the healpy convention, and any other pyshtools normalization/phase can be requested. `shcoeffs_to_q()` converts back to `Q`. The far-field evaluation uses pyshtools Legendre functions with pole-safe recurrences, is vectorised, and agrees with the MATLAB test data to ~1e-13 (about 60x faster than `sph_to_farfield` for nmax = 99). Tests: `tests/test_pysh.py`.
+
+### healpy <-> pyshtools
+
+`ant_sph_tools.healpix` converts spherical harmonic coefficients between pyshtools (any normalization, Condon-Shortley phase, real or complex kind) and [healpy](https://healpy.readthedocs.io/) `alm` arrays. healpy is only needed to *use* the alm, not to convert them.
+
+```python
+from ant_sph_tools import healpy_to_shtools, shtools_to_healpy
+
+alm = shtools_to_healpy(clm)                                       # SHCoeffs or (2, L+1, L+1) array
+alm_re, alm_im = shtools_to_healpy(d['U'], complex_field=True)     # complex fields -> two alm arrays
+clm = healpy_to_shtools(alm, normalization='4pi', csphase=1, kind='real')
+```
+
+The two libraries differ in phase convention (healpy includes the Condon-Shortley phase, pyshtools excludes it by default), normalization (orthonormal vs 4pi), real vs complex harmonics (real pyshtools coefficients map to `(C - iS)/sqrt(2)` for m > 0, not `C + iS`), and storage. See [docs/healpy_vs_pyshtools.md](docs/healpy_vs_pyshtools.md) for the full comparison and conversion formulas. Tests: `tests/test_healpix.py`.
+
 ### Requirements
 
-The code requires numpy, scipy and the [pyshtools](https://shtools.github.io/SHTOOLS/) package.
+The code requires numpy, scipy and the [pyshtools](https://shtools.github.io/SHTOOLS/) package. The healpy conversion tests also require healpy (skipped if it is not installed).
 
 ### Tests
 
